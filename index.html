@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personality Predictor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for results */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .progress-bar {
+            background-color: #374151; /* gray-700 */
+        }
+        .progress-bar-inner {
+            transition: width 0.5s ease-in-out;
+        }
+        /* Simple spinner */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #3B82F6; /* blue-500 */
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-2xl w-full bg-gray-800 rounded-xl shadow-2xl p-6 md:p-8">
+        
+        <h1 class="text-3xl font-bold text-center text-white mb-6">
+            AI Personality Predictor
+        </h1>
+        <p class="text-center text-gray-400 mb-6">
+            Enter a text (like a tweet or status update) and the AI will analyze its personality traits.
+        </p>
+
+        <div class="mb-4">
+            <label for="text-input" class="block text-sm font-medium text-gray-300 mb-2">Your Text</label>
+            <textarea id="text-input" rows="6" class="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="e.g., 'I am a very outgoing person and I love to talk to new people at parties.'"></textarea>
+        </div>
+
+        <button id="predict-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center">
+            <span id="btn-text">Analyze Personality</span>
+            <div id="spinner" class="spinner hidden ml-3"></div>
+        </button>
+
+        <div id="error-message" class="hidden text-red-400 text-center bg-red-900/50 p-3 rounded-lg mt-4">
+        </div>
+
+        <div id="results-container" class="mt-8 space-y-4">
+            </div>
+
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const predictBtn = document.getElementById('predict-btn');
+        const textInput = document.getElementById('text-input');
+        const resultsContainer = document.getElementById('results-container');
+        const errorMessage = document.getElementById('error-message');
+        const btnText = document.getElementById('btn-text');
+        const spinner = document.getElementById('spinner');
+
+        // ---
+        // --- !!! IMPORTANT: CHANGE THIS LINE !!! ---
+        // ---
+        // Replace 'http://<YOUR-NGROK-URL>.ngrok.io/predict' with your actual ngrok URL
+        const API_URL = 'https://masochistically-unfiltered-lucca.ngrok-free.dev/predict';
+        // ---
+        // ---
+
+        // Add click event listener to the button
+        predictBtn.addEventListener('click', () => {
+            const text = textInput.value;
+
+            // Simple validation
+            if (!text.trim()) {
+                showError("Please enter some text to analyze.");
+                return;
+            }
+
+            // --- Start the prediction process ---
+            setLoading(true);
+            
+            fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text }),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Server responded with an error');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Success! Display the results
+                displayResults(data);
+                setLoading(false);
+            })
+            .catch(error => {
+                // Handle errors
+                console.error('Error:', error);
+                showError(`Failed to connect to the AI model. (Error: ${error.message})`);
+                setLoading(false);
+            });
+        });
+
+        function setLoading(isLoading) {
+            if (isLoading) {
+                predictBtn.disabled = true;
+                predictBtn.classList.add('opacity-70', 'cursor-not-allowed');
+                btnText.textContent = 'Analyzing...';
+                spinner.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                resultsContainer.innerHTML = ''; // Clear old results
+            } else {
+                predictBtn.disabled = false;
+                predictBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+                btnText.textContent = 'Analyze Personality';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        function displayResults(results) {
+            resultsContainer.innerHTML = ''; // Clear any previous results
+            
+            // Sort by probability, descending
+            results.sort((a, b) => b.probability - a.probability);
+
+            results.forEach(trait => {
+                const percentage = (trait.probability * 100).toFixed(1);
+                const isHigh = trait.class === 'High';
+                
+                // Determine color for high/low
+                const barColor = isHigh ? 'bg-blue-500' : 'bg-gray-600';
+                const textColor = isHigh ? 'text-blue-300' : 'text-gray-400';
+                const classColor = isHigh ? 'text-blue-400' : 'text-gray-400';
+
+                const resultElement = document.createElement('div');
+                resultElement.className = 'bg-gray-900 p-4 rounded-lg';
+                resultElement.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-semibold text-lg ${textColor}">${trait.trait}</span>
+                        <span class="font-bold text-lg ${classColor}">${trait.class} (${percentage}%)</span>
+                    </div>
+                    <div class="w-full progress-bar rounded-full h-2.5">
+                        <div class="progress-bar-inner ${barColor} h-2.5 rounded-full" style="width: ${percentage}%"></div>
+                    </div>
+                `;
+                resultsContainer.appendChild(resultElement);
+            });
+        }
+
+    </script>
+</body>
+</html>
